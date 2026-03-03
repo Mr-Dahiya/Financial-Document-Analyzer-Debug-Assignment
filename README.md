@@ -1,38 +1,144 @@
-# Financial Document Analyzer - Debug Assignment
+# Financial Document Analyzer – Debug Assignment
 
-## Project Overview
-A comprehensive financial document analysis system that processes corporate reports, financial statements, and investment documents using AI-powered analysis agents.
+## Bugs Found & Fixes
 
-## Getting Started
+### 1. Dependency Conflicts
+- `pydantic==1.x` conflicted with `crewai==0.130.0` (requires v2).
+- `openai` and `fastapi` versions were incompatible with CrewAI dependencies.
+**Fix:** Upgraded to compatible versions and removed restrictive pins.  
+**Result:** Clean installation and stable environment.
 
-### Install Required Libraries
-```sh
-pip install -r requirement.txt
+---
+
+### 2. Broken PDF Loader
+- Used undefined `Pdf()` class → runtime crash.
+**Fix:** Replaced with `PyPDFLoader`.  
+**Result:** Stable PDF parsing.
+
+---
+
+### 3. No Financial Document Validation
+- System accepted any PDF.
+**Fix:** Added deterministic keyword-based financial validation.  
+**Result:** Prevents non-financial document analysis.
+
+---
+
+### 4. Inefficient Prompts
+- Tasks were vague and unstructured.
+**Fix:** Added step-by-step instructions and enforced structured JSON output.  
+**Result:** Consistent, reliable responses.
+
+---
+
+### 5. Weak Verifier Agent
+- No measurable validation criteria.
+**Fix:** Verifier now checks:
+- JSON structure
+- Logical consistency
+- Compliance
+
+---
+
+### 6. Unsafe File Handling
+- Used original filename → overwrite risk.
+**Fix:** Switched to UUID-based temporary filenames.
+
+---
+
+### 7. No Concurrency Handling
+- Original system was synchronous and blocking.
+**Fix:**
+Added Celery + Redis queue worker.
+Background job processing.
+Status tracking endpoint.
+
+---
+
+### 8. No Persistence Layer
+- Results were ephemeral.
+**Fix:**
+Integrated SQLite via SQLAlchemy.
+Stored job status and result.
+Added /status/{job_id} endpoint.
+
+---
+
+### 9. No Logging / Observability
+- No structured visibility into task state.
+**Fix:**
+Verbose Crew logs enabled
+Explicit status tracking via DB
+Failure state stored and returned
+
+---
+
+### 10. No Structured Output Contract
+- Original output was free-form text.
+**Fix:** Enforced strict JSON schema and added expected output format inside tasks.
+
+---
+
+## Setup Instructions
+
+### Create Virtual Environment (Recommended)
+```bash
+python -m venv venv
+venv\Scripts\activate
 ```
 
-### Sample Document
-The system analyzes financial documents like Tesla's Q2 2025 financial update.
+### Install Dependencies
+```bash
+pip install -r requirements.txt
+```
 
-**To add Tesla's financial document:**
-1. Download the Tesla Q2 2025 update from: https://www.tesla.com/sites/default/files/downloads/TSLA-Q2-2025-Update.pdf
-2. Save it as `data/sample.pdf` in the project directory
-3. Or upload any financial PDF through the API endpoint
+### Create .env File
+```bash
+OPENAI_API_KEY=your_key
+REDIS_URL=redis://localhost:6379/0
+DATABASE_URL=sqlite:///./analysis.db
+```
 
-**Note:** Current `data/sample.pdf` is a placeholder - replace with actual Tesla financial document for proper testing.
+### Start Redis
+```bash
+docker run -d -p 6379:6379 redis
+```
 
-# You're All Not Set!
-🐛 **Debug Mode Activated!** The project has bugs waiting to be squashed - your mission is to fix them and bring it to life.
+### Start Celery Worker
+```bash
+celery -A worker.celery worker --loglevel=info
+```
 
-## Debugging Instructions
+### Start API
+```bash
+uvicorn main:app --reload
+```
 
-1. **Identify the Bug**: Carefully read the code in each file and understand the expected behavior. There is a bug in each line of code. So be careful.
-2. **Fix the Bug**: Implement the necessary changes to fix the bug.
-3. **Test the Fix**: Run the project and verify that the bug is resolved.
-4. **Repeat**: Continue this process until all bugs are fixed.
+### Open in browser:
+http://127.0.0.1:8000/docs
 
-## Expected Features
-- Upload financial documents (PDF format)
-- AI-powered financial analysis
-- Investment recommendations
-- Risk assessment
-- Market insights
+
+## API Documentation
+
+### POST /analyze
+Uploads financial PDF and creates async job.
+Fields:
+file (PDF)
+query (string)
+Response:
+```json
+{
+  "job_id": "uuid",
+  "status": "PENDING"
+}
+```
+### GET /status/{job_id}
+Returns job status and result.
+Response (Success):
+```json
+{
+  "job_id": "uuid",
+  "status": "SUCCESS",
+  "result": "{ structured JSON output }"
+}
+```
